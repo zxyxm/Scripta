@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Scripta</AssemblyName>
+    <RootNamespace>Moye</RootNamespace>
+    <ApplicationIcon>AppIcon.ico</ApplicationIcon>
+    <Product>Scripta 思刻 Markdown 编辑器</Product>
+    <Version>0.3.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="AppIcon.ico;scripta-logo-carved-stone.png" />
+    <Content Include="AppIcon.ico;scripta-logo-carved-stone.png" Link="app/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="pdf-import.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+    <Content Include="../web/index.html;../web/editor.js;../web/visual-markdown.js;../web/style.css" Link="app/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../web/vendor/*" Link="app/vendor/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="RemoveUnusedWebView2WpfReference" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+</Project>

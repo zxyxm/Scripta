@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https: http:; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Scripta 思刻 · Markdown 编辑器</title>
+  <link rel="icon" href="./AppIcon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="./style.css">
+  <script defer src="./vendor/marked.js"></script>
+  <script defer src="./vendor/purify.js"></script>
+  <script defer src="./visual-markdown.js"></script>
+  <script defer src="./editor.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img class="brand-logo" src="./scripta-logo-carved-stone.png" width="144" height="48" alt="Scripta 思刻"></div>
+    <div class="file-actions">
+      <button id="notes" type="button" aria-controls="repository-panel" hidden>笔记仓库</button>
+      <button id="commit" type="button" aria-haspopup="dialog" aria-controls="commit-dialog" hidden>Commit</button>
+      <button id="new" type="button" title="新建 Markdown (Ctrl+N)">新建</button>
+      <button id="open" title="打开 (Ctrl+O)">打开</button>
+      <button id="import-pdf" type="button" hidden>导入 PDF</button>
+      <button id="import-wps-docx" type="button" hidden>导入 WPS 智能文档（DOCX）</button>
+      <button id="import-pdf-with-source" type="button" hidden>导入 PDF（带原页引用）</button>
+      <button id="merge-notes" type="button" hidden>合并 Markdown 笔记</button>
+      <button id="export-markdown" type="button" hidden>导出 Markdown 源码</button>
+      <button id="save" class="primary" type="button" title="保存 (Ctrl+S)">保存</button>
+      <button id="rename" type="button" hidden>重命名笔记</button>
+      <button id="display-settings" type="button" aria-haspopup="dialog" aria-controls="display-dialog">显示设置</button>
+      <input type="file" id="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+    </div>
+  </header>
+  <dialog id="display-dialog" aria-labelledby="display-title">
+    <form id="display-form">
+      <h2 id="display-title">显示设置</h2>
+      <div id="startup-window-settings" hidden>
+        <label for="startup-window-mode">启动窗口</label>
+        <select id="startup-window-mode">
+          <option value="automatic">自动适应屏幕</option>
+          <option value="custom">自定义尺寸</option>
+          <option value="maximized">最大化</option>
+        </select>
+        <div id="startup-window-size" hidden>
+          <label>宽度（px）<input id="startup-window-width" type="number" min="620" max="10000" required disabled></label>
+          <label>高度（px）<input id="startup-window-height" type="number" min="360" max="10000" required disabled></label>
+        </div>
+        <p>窗口设置在下次启动时生效，尺寸会限制在屏幕可用范围内。</p>
+      </div>
+      <label for="document-font-size">文档字号（px）</label>
+      <input id="document-font-size" type="number" min="12" max="36" required>
+      <label for="document-width">编辑区最大宽度（px）</label>
+      <input id="document-width" type="number" min="360" max="10000" required>
+      <div class="display-toggles">
+        <label id="startup-outline-setting" hidden><input id="startup-outline" type="checkbox">启动时显示大纲</label>
+        <label><input id="startup-block-labels" type="checkbox">启动时启用块类型（可视模式）</label>
+      </div>
+      <p id="display-error" role="alert"></p>
+      <div class="rename-actions">
+        <button id="display-cancel" type="button">取消</button>
+        <button id="display-save" class="primary" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="commit-dialog" aria-labelledby="commit-title">
+    <form id="commit-form">
+      <h2 id="commit-title">提交笔记</h2>
+      <p id="commit-draft" hidden>当前笔记有未保存的更改，本次提交使用磁盘上已保存的版本。</p>
+      <p id="commit-status" role="status"></p>
+      <div id="commit-details" hidden>
+        <ul id="commit-files" aria-label="本次提交文件"></ul>
+        <label for="commit-message">提交说明</label>
+        <input id="commit-message" type="text" required>
+      </div>
+      <div class="rename-actions">
+        <button id="commit-cancel" type="button">取消</button>
+        <button id="commit-confirm" class="primary" type="submit" disabled>提交</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="move-section-dialog" aria-labelledby="move-section-title">
+    <form id="move-section-form">
+      <h2 id="move-section-title">移动整个章节</h2>
+      <div class="move-section-columns">
+        <div><label for="move-section-folder">子仓库或文件夹</label><select id="move-section-folder" size="8"></select></div>
+        <div>
+          <div class="move-section-column-header">
+            <label for="move-section-file">Markdown 文件</label>
+            <button id="move-section-new" type="button" aria-expanded="false" aria-controls="move-section-create">新建</button>
+          </div>
+          <select id="move-section-file" size="8"></select>
+        </div>
+        <div><label for="move-section-position">插入位置</label><select id="move-section-position" size="8" required></select></div>
+      </div>
+      <div id="move-section-create" hidden>
+        <input id="move-section-new-name" type="text" aria-label="新笔记名称" placeholder="新笔记名称">
+        <button id="move-section-create-confirm" type="button">创建笔记</button>
+      </div>
+      <p id="move-section-target" role="status"></p>
+      <p id="move-section-error" role="alert"></p>
+      <div class="rename-actions">
+        <button id="move-section-cancel" type="button">取消</button>
+        <button id="move-section-confirm" class="primary" type="submit">移动章节</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="section-edit-dialog" aria-labelledby="section-edit-title">
+    <form id="section-edit-form">
+      <h2 id="section-edit-title">整段编辑</h2>
+      <aside id="section-format-tools" aria-label="章节格式操作">
+        <div class="section-format-headings">
+          <button id="section-promote" type="button">标题升一级</button>
+          <button id="section-demote" type="button">标题降一级</button>
+        </div>
+        <fieldset>
+          <legend>要清除的格式</legend>
+          <label><input type="checkbox" name="section-format" value="strong">加粗</label>
+          <label><input type="checkbox" name="section-format" value="em">斜体</label>
+          <label><input type="checkbox" name="section-format" value="del">删除线</label>
+          <label><input type="checkbox" name="section-format" value="link">链接</label>
+          <label><input type="checkbox" name="section-format" value="codespan">行内代码</label>
+        </fieldset>
+        <button id="section-clear-format" type="button" disabled>清除所选格式</button>
+        <p id="section-format-status" role="status"></p>
+      </aside>
+      <p id="section-edit-error" role="alert"></p>
+      <div class="rename-actions">
+        <button id="section-edit-cancel" type="button">取消</button>
+        <button class="primary" type="submit">应用</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="rename-dialog" aria-labelledby="rename-title">
+    <form id="rename-form">
+      <h2 id="rename-title">重命名笔记</h2>
+      <label for="rename-name">新名称</label>
+      <div class="rename-field"><input id="rename-name" required><span id="rename-extension"></span></div>
+      <p id="rename-error" role="alert"></p>
+      <div class="rename-actions">
+        <button id="rename-cancel" type="button">取消</button>
+        <button id="rename-confirm" class="primary" type="submit">重命名</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="note-icon-dialog" aria-labelledby="note-icon-title">
+    <h2 id="note-icon-title">设置图标</h2>
+    <p id="note-icon-name"></p>
+    <div id="note-icon-options" aria-label="可选图标" role="group"></div>
+    <p id="note-icon-status" role="alert" hidden></p>
+    <div class="rename-actions">
+      <button id="note-icon-remove" type="button">移除图标</button>
+      <button id="note-icon-close" type="button">关闭</button>
+    </div>
+  </dialog>
+  <dialog id="block-link-dialog" aria-labelledby="block-link-title">
+    <form id="block-link-form">
+      <h2 id="block-link-title">设置超链接</h2>
+      <label for="block-link-text">显示标题</label>
+      <input id="block-link-text" placeholder="留空时显示链接地址">
+      <label for="block-link-url">链接地址</label>
+      <input id="block-link-url" required spellcheck="false">
+      <p id="block-link-error" role="alert"></p>
+      <div class="rename-actions">
+        <button id="block-link-cancel" type="button">取消</button>
+        <button class="primary" type="submit">应用</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="note-search" aria-labelledby="note-search-title">
+    <h2 id="note-search-title">搜索笔记</h2>
+    <div class="note-search-controls">
+      <input id="note-search-query" type="search" maxlength="160" placeholder="文件名、章节标题或正文" aria-label="搜索笔记内容">
+      <button id="note-search-close" type="button">关闭</button>
+    </div>
+    <p id="note-search-status" role="status"></p>
+    <ul id="note-search-results" aria-label="搜索结果"></ul>
+  </dialog>
+  <dialog id="repository-sync" aria-labelledby="repository-sync-title">
+    <header>
+      <h2 id="repository-sync-title">笔记仓库</h2>
+      <p id="repository-sync-folder"></p>
+      <div class="repository-sync-actions">
+        <button id="repository-sync-choose" type="button">绑定本地文件夹</button>
+        <button id="repository-sync-unbind" type="button" disabled>解除绑定</button>
+        <button id="repository-sync-explorer" type="button">在资源管理器中打开</button>
+      </div>
+      <div class="repository-sync-actions repository-sync-modes" role="group" aria-label="同步方式">
+        <button id="repository-mode-local" type="button" aria-pressed="true" aria-controls="repository-local">本地刷新 / 间接拉取</button>
+        <button id="repository-mode-direct" type="button" aria-pressed="false" aria-controls="repository-direct">GitHub 直连</button>
+      </div>
+    </header>
+    <div id="repository-sync-content">
+      <section id="repository-local" aria-label="本地刷新和间接拉取">
+        <p>已有本地笔记时，绑定文件夹后可直接刷新。需要同步远程更新时，先用 GitHub Desktop、其他 Git 客户端或网盘同步到同一个文件夹，再回思刻刷新本地笔记。也支持 GitLab、Gitee 等来源。</p>
+        <div class="repository-sync-actions">
+          <button id="repository-sync-refresh" class="primary" type="button">刷新本地笔记</button>
+          <button id="repository-sync-desktop" type="button">在 GitHub Desktop 中打开</button>
+        </div>
+      </section>
+      <section id="repository-direct" aria-label="GitHub 直连" hidden>
+        <p>新建绑定或首次下载会在所选本地文件夹下创建与 GitHub 仓库同名的子文件夹，并将它设为当前笔记仓库。已有远程内容时请选择「首次下载并绑定」。</p>
+        <div class="repository-sync-actions">
+          <button id="repository-setup-git" type="button">一键安装并配置 Git</button>
+        </div>
+        <form id="repository-sync-form">
+          <label for="repository-sync-url">GitHub 仓库地址</label>
+          <input id="repository-sync-url" type="text" maxlength="300" placeholder="https://github.com/owner/repo" required>
+          <div class="repository-sync-actions">
+            <button id="repository-sync-bind" type="submit">新建同名子文件夹并绑定</button>
+            <button id="repository-sync-clone" type="submit">首次下载并绑定</button>
+          </div>
+        </form>
+        <div class="repository-sync-actions repository-sync-transfer">
+          <button id="repository-sync-pull" type="button">直接拉取更新</button>
+          <button id="repository-sync-push" type="button">推送</button>
+        </div>
+        <details id="repository-partial">
+          <summary>只拉取指定文件或目录</summary>
+          <form id="repository-partial-form">
+            <label for="repository-partial-url">GitHub 仓库地址</label>
+            <input id="repository-partial-url" type="text" maxlength="300" placeholder="https://github.com/owner/repo" required>
+            <label for="repository-partial-path">仓库内的相对路径</label>
+            <input id="repository-partial-path" type="text" maxlength="1000" placeholder="例如 主题/资料 或 主题/笔记.md" required>
+            <div class="repository-sync-actions">
+              <button id="repository-partial-choose" type="button">选择保存文件夹</button>
+              <button id="repository-partial-pull" type="submit" disabled>拉取选定内容</button>
+            </div>
+            <p id="repository-partial-folder">请选择空文件夹，或上一次部分拉取用的文件夹。</p>
+          </form>
+        </details>
+      </section>
+    </div>
+    <div class="repository-sync-footer">
+      <p id="repository-sync-status" role="status"></p>
+      <progress id="repository-pull-progress" max="100" aria-label="拉取阶段进度" hidden></progress>
+      <p id="repository-pull-time" hidden></p>
+      <div class="repository-sync-actions">
+        <button id="repository-pull-cancel" type="button" hidden>中断拉取</button>
+        <button id="repository-sync-close" type="button">关闭</button>
+      </div>
+    </div>
+  </dialog>
+  <div class="workspace">
+    <aside id="sidebar" class="sidebar">
+      <div id="sidebar-views" class="sidebar-views" role="group" aria-label="侧栏视图" hidden>
+        <button id="repository-view" type="button" aria-controls="repository-panel" aria-pressed="true">笔记</button>
+        <button id="outline-view" type="button" aria-controls="outline-panel" aria-pressed="false">大纲</button>
+      </div>
+      <section id="repository-panel" class="sidebar-panel" aria-label="笔记仓库" hidden>
+        <div class="repository-header">
+          <button id="notes-root" type="button" hidden></button>
+          <div id="notes-tools" role="group" aria-label="笔记仓库操作" hidden>
+            <button id="notes-search" type="button" aria-label="搜索笔记 (Ctrl+Shift+F)" title="搜索笔记 (Ctrl+Shift+F)"><span class="tree-search" aria-hidden="true"></span></button>
+            <button id="notes-new-file" type="button" aria-label="新建 Markdown" title="新建 Markdown"><span class="tree-add tree-file" aria-hidden="true"></span></button>
+            <button id="notes-new-folder" type="button" aria-label="新建文件夹" title="新建文件夹"><span class="tree-add tree-folder" aria-hidden="true"></span></button>
+            <button id="notes-refresh" type="button" aria-label="刷新本地笔记" title="刷新本地笔记">↻</button>
+            <button id="notes-collapse" type="button" aria-label="折叠全部文件夹" title="折叠全部文件夹">⊟</button>
+          </div>
+        </div>
+        <p id="notes-overview" hidden></p>
+        <form id="notes-create" hidden>
+          <label id="notes-create-label" for="notes-create-name"></label>
+          <div><input id="notes-create-name" required><button type="submit">创建</button><button id="notes-create-cancel" type="button">取消</button></div>
+        </form>
+        <p id="notes-status" role="status" hidden></p>
+        <button id="notes-choose" type="button" hidden>选择笔记文件夹</button>
+        <nav id="notes-tree" aria-label="笔记目录" hidden></nav>
+      </section>
+      <nav id="outline-panel" class="sidebar-panel" aria-label="文档大纲">
+        <div class="outline-header">
+          <h2>文档大纲</h2>
+          <div class="outline-actions">
+            <select id="outline-depth" aria-label="大纲显示到几级标题" aria-controls="outline" hidden>
+              <option value="">全部级别</option>
+              <option value="1">显示至 H1</option>
+              <option value="2">显示至 H2</option>
+              <option value="3">显示至 H3</option>
+              <option value="4">显示至 H4</option>
+              <option value="5">显示至 H5</option>
+              <option value="6">显示至 H6</option>
+            </select>
+            <button id="outline-smart" type="button" aria-controls="outline" hidden>智能折叠</button>
+            <button id="outline-collapse" type="button" aria-controls="outline" hidden>折叠全部</button>
+          </div>
+        </div>
+        <p id="outline-filter-empty" hidden>当前没有符合所选级别的标题</p>
+        <div id="outline"></div>
+      </nav>
+      <button id="theme" class="theme" type="button"></button>
+    </aside>
+    <div id="sidebar-splitter" class="sidebar-splitter" role="separator" tabindex="0"
+      aria-label="调整侧栏宽度" aria-orientation="vertical" aria-controls="sidebar" hidden></div>
+    <main class="main">
+      <header class="editor-header">
+        <div class="document-header">
+          <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-pressed="true" title="切换侧栏" aria-label="切换侧栏"><span class="sidebar-icon" aria-hidden="true"></span></button>
+          <span class="document-icon" aria-hidden="true"></span>
+          <strong id="filename"></strong>
+          <div id="quick-file-actions" class="quick-file-actions" role="group" aria-label="快捷文件操作" hidden>
+            <button id="open-repository" type="button" title="管理笔记仓库和 GitHub 同步">打开仓库</button>
+          </div>
+        </div>
+        <div class="toolbar">
+          <div class="format-actions" role="group" aria-label="文本格式">
+            <button id="undo-edit" type="button" title="撤回上一步 (Ctrl+Z)" aria-label="撤回上一步" disabled>↶</button>
+            <button data-format="bold" title="粗体 (Ctrl+B)" aria-label="粗体"><b>B</b></button>
+            <button data-format="italic" title="斜体 (Ctrl+I)" aria-label="斜体"><i>I</i></button>
+            <button data-format="heading" title="二级标题" aria-label="二级标题">H₂</button>
+            <button data-format="link" title="链接 (Ctrl+K)" aria-label="链接">↗</button>
+            <button data-format="task" title="任务项" aria-label="任务项">☑</button>
+            <button data-format="code" title="行内代码" aria-label="行内代码">&lt;/&gt;</button>
+          </div>
+          <div class="modes" role="group" aria-label="编辑模式">
+            <button id="write-mode" aria-pressed="true" title="点击段落编辑 Markdown">模式 1</button>
+            <button id="visual-mode" aria-pressed="false" title="直接在排版上编辑">模式 2</button>
+            <button id="source-mode" aria-pressed="false" title="切换源码 (Ctrl+/)">源码</button>
+          </div>
+        </div>
+      </header>
+      <div class="editor-body">
+        <div class="editor-outline" hidden>
+          <div class="editor-outline-actions">
+            <button id="editor-outline-toggle" type="button" aria-expanded="false" aria-controls="editor-outline-slot" hidden>大纲</button>
+            <button id="block-label-toggle" type="button" aria-pressed="false" aria-controls="block-controls" hidden>块类型</button>
+            <div id="note-folder-actions" role="group" aria-label="笔记附件文件夹" hidden>
+              <button id="open-note-assets" type="button" title="在资源管理器中打开当前笔记的 .assets 文件夹">打开图床</button>
+              <button id="open-note-references" type="button" title="在资源管理器中打开当前笔记的 .资料 文件夹">打开参考资料</button>
+            </div>
+          </div>
+          <div id="editor-outline-slot" hidden></div>
+        </div>
+        <div id="viewport" class="viewport">
+          <article id="paper" class="paper markdown" aria-label="Markdown 文档"></article>
+          <textarea id="source" aria-label="Markdown 源码" spellcheck="false" hidden></textarea>
+          <div id="block-controls" hidden>
+            <button id="block-handle" type="button" aria-haspopup="menu" aria-controls="block-menu" aria-expanded="false" hidden></button>
+            <button id="section-move-handle" type="button" tabindex="-1" hidden>按住拖动整段</button>
+            <button id="section-edit-button" type="button" aria-haspopup="dialog" aria-controls="section-edit-dialog" hidden>整段编辑</button>
+            <div id="section-drop-guide" aria-hidden="true" hidden></div>
+            <div id="heading-tools" role="group" aria-label="选区操作" hidden>
+              <span id="heading-tools-count"></span>
+              <div class="selection-text-tools">
+                <button type="button" data-selection-action="copy">复制</button>
+                <button type="button" data-selection-action="bold">加粗</button>
+                <button type="button" data-selection-action="italic">斜体</button>
+              </div>
+              <div class="heading-tools-shift">
+                <button type="button" data-heading-change="up">升一级</button>
+                <button type="button" data-heading-change="down">降一级</button>
+              </div>
+              <div class="heading-tools-levels">
+                <button type="button" data-heading-change="1" aria-label="统一设为 H1">H1</button>
+                <button type="button" data-heading-change="2" aria-label="统一设为 H2">H2</button>
+                <button type="button" data-heading-change="3" aria-label="统一设为 H3">H3</button>
+                <button type="button" data-heading-change="4" aria-label="统一设为 H4">H4</button>
+                <button type="button" data-heading-change="5" aria-label="统一设为 H5">H5</button>
+                <button type="button" data-heading-change="6" aria-label="统一设为 H6">H6</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="statusbar">
+        <span class="status"><span class="status-dot" aria-hidden="true"></span><span id="status" role="status"></span></span>
+        <span id="count"></span>
+      </footer>
+    </main>
+  </div>
+  <div id="note-menu" role="menu" aria-label="笔记操作" tabindex="-1" hidden></div>
+  <div id="note-move-menu" role="menu" aria-label="子仓库列表" tabindex="-1" hidden></div>
+  <div id="block-menu" role="menu" aria-label="段落操作" tabindex="-1" hidden></div>
+</body>
+</html>
